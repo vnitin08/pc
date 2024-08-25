@@ -1,3 +1,4 @@
+// test commit-
 import { createZkNoidGameConfig } from '@/lib/createConfig';
 import { ZkNoidGameType } from '@/lib/platform/game_types';
 import { GuessGame } from 'zknoid-chain-dev';
