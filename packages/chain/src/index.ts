@@ -17,5 +17,6 @@ export * from "./environments/client.config";
 export { Balances } from './framework';
 
 export { GuessGame } from './number_guessing';
+export { SlotMachine } from './TokenTwist';
 
 export { ClientAppChain, ProtokitLibrary, UInt64 as ProtoUInt64 };
