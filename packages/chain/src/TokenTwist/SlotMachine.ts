@@ -3,6 +3,7 @@ import {
   Field,
   PublicKey,
   UInt64,
+  Poseidon,
 } from 'o1js';
 import { state, runtimeMethod } from '@proto-kit/module';
 import { State, StateMap, assert } from '@proto-kit/protocol';
@@ -15,7 +16,18 @@ export class SlotMachine extends RuntimeModule<SlotMachineConfig> {
   @state() jackpot = State.from<UInt64>(UInt64);
   @state() playerBalances = StateMap.from<PublicKey, UInt64>(PublicKey, UInt64);
   @state() lastSpins = StateMap.from<PublicKey, Field>(PublicKey, Field);
-  randomGen: any;
+  @state() commitments = StateMap.from<PublicKey, Field>(PublicKey, Field);
+
+  private randomGen: RandomGenerator;
+
+  constructor(config: SlotMachineConfig) {
+    super();
+    this.randomGen = new RandomGenerator({ seed: Field.random(), source: Field.random(), curValue: Field.random() });
+  }
+
+  private generateCommitment(): Field {
+    return Field.random();
+  }
 
   @runtimeMethod()
   public async spin(bet: UInt64) {
@@ -27,17 +39,23 @@ export class SlotMachine extends RuntimeModule<SlotMachineConfig> {
     // Deduct bet from player balance
     await this.playerBalances.set(sender, playerBalance.value.sub(bet));
 
-    const seed = Field.random();  // Generate a random seed
+    // Internal commit-reveal process
+    const commitment = this.generateCommitment();
+    await this.commitments.set(sender, commitment);
+
+    const seed = Poseidon.hash([commitment, Field.random()]); // Generate a random seed
     const randomGen = RandomGenerator.from(seed); // Use same instance of RandomGenerator
 
     // Generate random numbers for reels (0, 1, or 2 representing different symbols)
-    const reel1 = this.randomGen.getNumber(3).toBigInt();
-    const reel2 = this.randomGen.getNumber(3).toBigInt();
-    const reel3 = this.randomGen.getNumber(3).toBigInt();
+    const reel1 = BigInt(this.randomGen.getNumber(3).toString());
+    const reel2 = BigInt(this.randomGen.getNumber(3).toString());
+    const reel3 = BigInt(this.randomGen.getNumber(3).toString());
 
     await this.lastSpins.set(sender, Field.from(reel1 * 100n + reel2 * 10n + reel3));
 
-    const isJackpot = reel1 === 0n && reel2 === 0n && reel3 === 0n;
+    const isJackpot = (reel1 === 0n && reel2 === 0n && reel3 === 0n) ||
+                      (reel1 === 1n && reel2 === 1n && reel3 === 1n) ||
+                      (reel1 === 2n && reel2 === 2n && reel3 === 2n);
 
     if (isJackpot) {
       let currentJackpot = await this.jackpot.get();
@@ -51,6 +69,11 @@ export class SlotMachine extends RuntimeModule<SlotMachineConfig> {
         await this.playerBalances.set(sender, playerBalance.value.add(bet.mul(2)));
       }
     }
+
+    // Clear the commitment after the spin
+    await this.commitments.set(sender, Field(0));
+
+    return { reel1, reel2, reel3 };
   }
 
   @runtimeMethod()
