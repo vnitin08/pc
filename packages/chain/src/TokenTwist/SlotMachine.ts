@@ -47,14 +47,16 @@ export class SlotMachine extends RuntimeModule {
     const currentJackpot = (await this.jackpot.get()).value;
     let newPlayerBalance = playerBalance;
 
-    newPlayerBalance = Provable.if(
+    newPlayerBalance = Provable.if<UInt64>(
       isJackpot.equals(Field(1)),
+      UInt64,
       newPlayerBalance.add(currentJackpot),
       newPlayerBalance
     );
 
-    const newJackpot = Provable.if(
+    const newJackpot = Provable.if<UInt64>(
       isJackpot.equals(Field(1)),
+      UInt64,
       UInt64.from(0),
       currentJackpot.add(bet)
     );
@@ -63,8 +65,9 @@ export class SlotMachine extends RuntimeModule {
 
     const hasMatch = reel1.equals(reel2).or(reel2.equals(reel3)).or(reel1.equals(reel3));
     
-    newPlayerBalance = Provable.if(
+    newPlayerBalance = Provable.if<UInt64>(
       hasMatch.and(isJackpot.equals(Field(0))),
+      UInt64,
       newPlayerBalance.add(bet.mul(UInt64.from(2))),
       newPlayerBalance
     );
