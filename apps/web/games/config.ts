@@ -11,13 +11,6 @@ import { tokenTwistConfig } from './TokenTwist/config';
 
 export const zkNoidConfig = createConfig({
   games: [
-    lotteryConfig,
-    tileVilleConfig,
-    randzuConfig,
-    checkersConfig,
-    thimblerigConfig,
-    pokerConfig,
-    arkanoidConfig,
     numberGuessingConfig,
     tokenTwistConfig
   ],
