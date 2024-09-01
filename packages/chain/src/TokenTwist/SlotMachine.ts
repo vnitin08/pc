@@ -1,23 +1,38 @@
-import { RuntimeModule, runtimeMethod, runtimeModule, state } from '@proto-kit/module';
+import { 
+  RuntimeModule, 
+  runtimeMethod, 
+  runtimeModule, 
+  state 
+} from '@proto-kit/module';
 import {
   Field,
   PublicKey,
   Poseidon,
   Provable,
 } from 'o1js';
-import { State, StateMap, assert } from '@proto-kit/protocol';
-import { UInt64 } from '@proto-kit/library'
+import { 
+  State, 
+  StateMap, 
+  assert 
+} from '@proto-kit/protocol';
+import { UInt64 } from '@proto-kit/library';
+import { RandomGenerator } from '../engine';
+import { run } from 'node:test';
 
 @runtimeModule()
 export class SlotMachine extends RuntimeModule {
   @state() public jackpot = State.from<UInt64>(UInt64);
   @state() public playerBalances = StateMap.from<PublicKey, UInt64>(PublicKey, UInt64);
   @state() public lastSpins = StateMap.from<PublicKey, Field>(PublicKey, Field);
+  @state() public lastSpinHashes = StateMap.from<PublicKey, Field>(PublicKey, Field);
 
-  // Constant reel values for testing
-  private readonly REEL1_VALUE = Field(0);
-  private readonly REEL2_VALUE = Field(1);
-  private readonly REEL3_VALUE = Field(2);
+  private randomGen: RandomGenerator;
+
+  constructor() {
+    super();
+    this.randomGen = new RandomGenerator({ seed: Field.random(), source: Field.random(), curValue: Field.random() });
+  }
+
 
   @runtimeMethod()
   public async spin(bet: UInt64): Promise<{ reel1: Field; reel2: Field; reel3: Field }> {
@@ -29,13 +44,23 @@ export class SlotMachine extends RuntimeModule {
     // Deduct bet from player balance
     await this.playerBalances.set(sender, playerBalance.sub(bet));
 
-    // Use constant values instead of random generation
-    const reel1 = this.REEL1_VALUE;
-    const reel2 = this.REEL2_VALUE;
-    const reel3 = this.REEL3_VALUE;
+    // Generate random numbers for reels (0, 1, or 2 representing different symbols)
+    const reel1 = Field.from(this.randomGen.getNumber(3).toString());
+    const reel2 = Field.from(this.randomGen.getNumber(3).toString());
+    const reel3 = Field.from(this.randomGen.getNumber(3).toString());
 
-    await this.lastSpins.set(sender, reel1.mul(Field(100)).add(reel2.mul(Field(10))).add(reel3));
+    // Hash the spin result using Poseidon
+    const spinHash = Poseidon.hash([reel1, reel2, reel3]);
+    
+    // Store the last spin hash
+    await this.lastSpinHashes.set(sender, spinHash);
 
+    // Convert the result to UInt64 before setting it in lastSpins
+    const spinResult = UInt64.from(reel1.mul(Field(100)).add(reel2.mul(Field(10))).add(reel3).toString());
+    await this.lastSpins.set(sender, Field.from(spinResult.toString()));
+
+
+    // Check if the player won the jackpot
     const isJackpot = Provable.if(
       reel1.equals(Field(0)).and(reel2.equals(Field(0))).and(reel3.equals(Field(0)))
         .or(reel1.equals(Field(1)).and(reel2.equals(Field(1))).and(reel3.equals(Field(1))))
@@ -75,6 +100,19 @@ export class SlotMachine extends RuntimeModule {
     await this.playerBalances.set(sender, newPlayerBalance);
 
     return { reel1, reel2, reel3 };
+  }
+
+
+  @runtimeMethod()
+  public async verifySpin( reel1: Field, reel2: Field, reel3: Field): Promise<boolean> {
+    const sender = this.transaction.sender.value;
+    const expectedHash = (await this.lastSpinHashes.get(sender)).value;
+
+    // Recompute the hash of the spin result with provided reels
+    const spinHash = Poseidon.hash([reel1, reel2, reel3]);
+
+    // Verify that the recomputed hash matches the stored hash
+    return expectedHash.equals(spinHash).toBoolean();
   }
 
   @runtimeMethod()
