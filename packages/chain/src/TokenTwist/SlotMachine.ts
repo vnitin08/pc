@@ -56,7 +56,8 @@ export class SlotMachine extends RuntimeModule {
     await this.lastSpinHashes.set(sender, spinHash);
 
     // Convert the result to UInt64 before setting it in lastSpins
-    const spinResult = UInt64.from(reel1.mul(Field(100)).add(reel2.mul(Field(10))).add(reel3).toString());
+    const spinResult = UInt64.from(0);
+    spinResult.value = reel1.mul(Field(100)).add(reel2.mul(Field(10))).add(reel3);
     await this.lastSpins.set(sender, Field.from(spinResult.toString()));
 
 
