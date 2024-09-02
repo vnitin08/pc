@@ -104,7 +104,7 @@ export class SlotMachine extends RuntimeModule {
 
 
   @runtimeMethod()
-  public async verifySpin( reel1: Field, reel2: Field, reel3: Field): Promise<boolean> {
+  public async verifySpin( reel1: Field, reel2: Field, reel3: Field): Promise<Field> {
     const sender = this.transaction.sender.value;
     const expectedHash = (await this.lastSpinHashes.get(sender)).value;
 
@@ -112,7 +112,7 @@ export class SlotMachine extends RuntimeModule {
     const spinHash = Poseidon.hash([reel1, reel2, reel3]);
 
     // Verify that the recomputed hash matches the stored hash
-    return expectedHash.equals(spinHash).toBoolean();
+    return Provable.if(expectedHash.equals(spinHash), Field(1), Field(0));
   }
 
   @runtimeMethod()
