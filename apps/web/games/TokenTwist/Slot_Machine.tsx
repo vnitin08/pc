@@ -16,7 +16,7 @@ import Rules from './components/Rules';
 import HowToPlay from './components/HowToPlay';
 import BetControl from './components/BetControl';
 
-const SYMBOLS = ['🍌', '7️⃣', '🍒', '🍑'];
+const SYMBOLS = ['💲', '₿', '💰'];
 const ICON_HEIGHT = 100;
 const NUM_ICONS = SYMBOLS.length;
 const TIME_PER_ICON = 100;
@@ -85,13 +85,15 @@ export default function Slot_Machine({
 }: {
   params: { competitionId: string };
 }){
-  const [balance, setBalance] = useState('0');
+  const [auroBalance, setAuroBalance] = useState('0');
+  const [gameBalance, setGameBalance] = useState('0');
   const [bet, setBet] = useState<number>(1);
   const [jackpot, setJackpot] = useState('0');
   const [spinning, setSpinning] = useState(false);
   const [reels, setReels] = useState([0, 1, 2]);
   const [slotMachine, setSlotMachine] = useState<SlotMachine | null>(null);
   const [spinCompleteCount, setSpinCompleteCount] = useState(0);
+  const [gameResult, setGameResult] = useState<string | null>(null);
 
   const { client } = useContext(ZkNoidGameContext);
 
@@ -126,23 +128,61 @@ export default function Slot_Machine({
     initializeSlotMachine();
   }, [client]);
 
-  const fetchBalance = async () => {
+  const fetchAuroBalance = async () => {
+    // Implement fetching Auro wallet balance
+    // This is a placeholder, replace with actual Auro wallet balance fetching
+    setAuroBalance('1000');
+  };
+  
+  const fetchGameBalance = async () => {
     if (!slotMachine) return;
-    const balance = await slotMachine.getBalance();
-    setBalance(balance.toString());
+    try {
+      const balance = await slotMachine.getBalance();
+      setGameBalance(balance.toString());
+    } catch (error) {
+      console.error('Error fetching game balance:', error);
+      notificationStore.create({
+        type: 'error',
+        message: 'Failed to fetch game balance. Please try again.',
+      });
+    }
   };
 
   const fetchJackpot = async () => {
     if (!slotMachine) return;
-    const jackpot = await slotMachine.getJackpot();
-    setJackpot(jackpot.toString());
+    try {
+      const jackpot = await slotMachine.getJackpot();
+      setJackpot(jackpot.toString());
+    } catch (error) {
+      console.error('Error fetching jackpot:', error);
+      notificationStore.create({
+        type: 'error',
+        message: 'Failed to fetch jackpot. Please try again.',
+      });
+    }
   };
 
   const handleSpin = async () => {
-    if (!slotMachine || !client) return;
-    console.log('Spin started'); // Debugging statement
+    if (!slotMachine || !client) {
+      notificationStore.create({
+        type: 'error',
+        message: 'Slot Machine not initialized. Please refresh and try again.',
+      });
+      return;
+    }
+    
+    if (BigInt(gameBalance) < BigInt(bet)) {
+      notificationStore.create({
+        type: 'error',
+        message: 'Insufficient balance for this bet.',
+      });
+      return;
+    }
+
     setSpinning(true);
     setSpinCompleteCount(0);
+    setGameResult(null);
+
     try {
       const tx = await client.transaction(
         PublicKey.fromBase58(networkStore.address!),
@@ -153,41 +193,57 @@ export default function Slot_Machine({
   
       await tx.sign();
       await tx.send();
-  
+
+      // After transaction is processed, trigger finalization
+      finalizeSpin();
     } catch (error) {
       console.error('Error spinning:', error);
       notificationStore.create({
         type: 'error',
-        message: 'Error spinning the slot machine!',
+        message: 'Error spinning the slot machine! Please try again.',
       });
-      setSpinning(false); // Reset spinning state if an error occurs
+      setSpinning(false);
     }
   };
 
   const handleSpinComplete = () => {
     setSpinCompleteCount(prev => prev + 1);
-    if (spinCompleteCount === 2) {
-      finalizeSpin();
-    }
   };
 
   const finalizeSpin = async () => {
     if (!slotMachine) return;
-    const lastSpin = await slotMachine.getLastSpin();
-    const spinResult = lastSpin.toBigInt();
+    try {
+      const lastSpin = await slotMachine.getLastSpin();
+      const spinResult = lastSpin.toBigInt();
 
-    const reel3 = Number(spinResult % 10n);
-    const reel2 = Number((spinResult / 10n) % 10n);
-    const reel1 = Number(spinResult / 100n);
+      const reel3 = Number(spinResult % 10n);
+      const reel2 = Number((spinResult / 10n) % 10n);
+      const reel1 = Number(spinResult / 100n);
 
-    setReels([reel1, reel2, reel3]);
-    setSpinning(false);
-    fetchBalance();
-    fetchJackpot();
+      setReels([reel1, reel2, reel3]);
+      setSpinning(false);
+
+      if (reel1 === reel2 && reel2 === reel3) {
+        setGameResult('You won!');
+      } else {
+        setGameResult('You lost. Try again!');
+      }
+
+      fetchGameBalance();
+      fetchJackpot();
+    } catch (error) {
+      console.error('Error finalizing spin:', error);
+      notificationStore.create({
+        type: 'error',
+        message: 'Error finalizing spin. Please check your game state.',
+      });
+      setSpinning(false);
+    }
   };
 
   useEffect(() => {
-    fetchBalance();
+    fetchAuroBalance();
+    fetchGameBalance();
     fetchJackpot();
   }, [protokitChain.block, slotMachine]);
 
@@ -198,7 +254,12 @@ export default function Slot_Machine({
       mobileImage={CoverSVG}
       defaultPage={'Game'}
     >
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-between item-center mb-4">
+        <div className='flex gap-4'>
+          <p className="text-left-accent text-2xl">Auro Balance: $ {auroBalance} </p>
+          <p className="text-left-accent text-2xl">Game Balance: $ {gameBalance} Znakes</p>
+          <p className="text-left-accent text-2xl">Jackpot: $ {jackpot} Znakes</p>
+        </div>
         <div className="flex gap-2">
           <Rules />
           <HowToPlay />
@@ -232,6 +293,12 @@ export default function Slot_Machine({
               className="mt-4 text-black p-4 text-2xl px-6 rounded-full"
             />
           </div>
+
+          {gameResult && (
+            <div className={`mt-4 text-2xl ${gameResult.includes('won') ? 'text-green-500' : 'text-red-500'}`}>
+              {gameResult}
+            </div>
+          )}
         </motion.div>
 
         {/* Right Column */}
@@ -240,9 +307,6 @@ export default function Slot_Machine({
           <p className="text-left-accent">
             Here you can display additional information or features related to your game or slot machine.
           </p>
-          <h2 className="text-left-accent text-xl">Game Info</h2>
-          <p className="text-left-accent">Balance: $ {balance} Znakes </p>
-          <p className="text-left-accent">Jackpot: $ {jackpot} Znakes</p>
         </div>
       </div>
     </GamePage>
