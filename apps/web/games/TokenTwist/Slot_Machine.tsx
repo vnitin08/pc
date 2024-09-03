@@ -1,7 +1,8 @@
-import React, { useState, useEffect, ChangeEvent, useContext } from 'react';
-import { Field, UInt64, PublicKey, Poseidon } from 'o1js';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Field, PublicKey } from 'o1js';
+import { UInt64 } from '@proto-kit/library';
 import { useNetworkStore } from '@/lib/stores/network';
-import { ClientAppChain } from 'zknoid-chain-dev';
+import { ClientAppChain, SlotMachine } from 'zknoid-chain-dev';
 import GamePage from '@/components/framework/GamePage';
 import { tokenTwistConfig } from './config';
 import ZkNoidGameContext from '@/lib/contexts/ZkNoidGameContext';
@@ -10,17 +11,67 @@ import CoverSVG from './assets/game-cover.svg';
 import { DEFAULT_PARTICIPATION_FEE } from 'zknoid-chain-dev/dist/src/engine/LobbyManager';
 import { motion } from 'framer-motion';
 import Button from '@/components/shared/Button';
-import toast from '@/components/shared/Toast';
-import { useToasterStore } from '@/lib/stores/toasterStore';
+import { useNotificationStore } from '@/components/shared/Notification/lib/notificationStore';
+import Rules from './components/Rules';
+import HowToPlay from './components/HowToPlay';
+import BetControl from './components/BetControl';
 
-interface SlotMachineModule {
-  getBalance: () => Promise<UInt64>;
-  getJackpot: () => Promise<UInt64>;
-  spin: (bet: UInt64) => Promise<void>;
-  deposit: (amount: UInt64) => Promise<void>;
-  withdraw: (amount: UInt64) => Promise<void>;
-  getLastSpin: () => Promise<Field>;
+const SYMBOLS = ['🍌', '7️⃣', '🍒', '🍑'];
+const ICON_HEIGHT = 100;
+const NUM_ICONS = SYMBOLS.length;
+const TIME_PER_ICON = 100;
+
+interface ReelProps {
+  spinning: boolean;
+  finalSymbol?: number;
+  onSpinComplete: () => void;
 }
+
+const Reel: React.FC<ReelProps> = ({ spinning, finalSymbol, onSpinComplete }) => {
+  const reelRef = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    if (spinning) {
+      const delta = 2 * NUM_ICONS + Math.round(Math.random() * NUM_ICONS);
+      const duration = (8 + delta) * TIME_PER_ICON;
+
+      setOffset(prev => prev + delta * ICON_HEIGHT);
+
+      setTimeout(() => {
+        if (reelRef.current) {
+          reelRef.current.style.transition = `transform ${duration}ms cubic-bezier(.41,-0.01,.63,1.09)`;
+          reelRef.current.style.transform = `translateY(${-(offset + delta * ICON_HEIGHT)}px)`;
+        }
+      }, 0);
+
+      setTimeout(() => {
+        if (reelRef.current) {
+          reelRef.current.style.transition = 'none';
+          reelRef.current.style.transform = `translateY(${-((offset + delta * ICON_HEIGHT) % (NUM_ICONS * ICON_HEIGHT))}px)`;
+        }
+        onSpinComplete();
+      }, duration);
+    }
+  }, [spinning]);
+
+  return (
+    <div className="reel w-[100px] h-[300px] border border-black/30 rounded-md overflow-hidden relative bg-gray-800">
+      <div 
+        ref={reelRef}
+        className="absolute top-0 left-0 w-full"
+        style={{ transform: `translateY(${-offset}px)` }}
+      >
+        {[...SYMBOLS, ...SYMBOLS, ...SYMBOLS].map((symbol, index) => (
+          <div key={index} className="h-[100px] flex items-center justify-center text-6xl">
+            {symbol}
+          </div>
+        ))}
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/40 pointer-events-none"></div>
+    </div>
+  );
+};
 
 const competition = {
   id: 'global',
@@ -34,102 +85,111 @@ export default function Slot_Machine({
 }: {
   params: { competitionId: string };
 }){
-  const [balance, setBalance] = useState<string>('0');
-  const [bet, setBet] = useState<string>('1');
-  const [jackpot, setJackpot] = useState<string>('0');
-  const [lastSpin, setLastSpin] = useState<string>('');
-  const [message, setMessage] = useState<string>('');
-
-//   const { client } = useContext(ZkNoidGameContext);
-//   const slotMachine = client?.runtime.getModule('SlotMachine') as SlotMachineModule | undefined;
+  const [balance, setBalance] = useState('0');
+  const [bet, setBet] = useState<number>(1);
+  const [jackpot, setJackpot] = useState('0');
+  const [spinning, setSpinning] = useState(false);
+  const [reels, setReels] = useState([0, 1, 2]);
+  const [slotMachine, setSlotMachine] = useState<SlotMachine | null>(null);
+  const [spinCompleteCount, setSpinCompleteCount] = useState(0);
 
   const { client } = useContext(ZkNoidGameContext);
-  let slotMachine: SlotMachineModule | undefined;
 
   if (!client) {
     throw Error('Context app chain client is not set');
   }
 
+  const networkStore = useNetworkStore();
+  const protokitChain = useProtokitChainStore();
+  const notificationStore = useNotificationStore();
+
   useEffect(() => {
-    if (slotMachine) {
-      fetchBalance();
-      fetchJackpot();
-    }
-  }, [slotMachine]);
+    const initializeSlotMachine = async () => {
+      if (client) {
+        const clientAppChain = client as ClientAppChain<
+          typeof tokenTwistConfig.runtimeModules,
+          any,
+          any,
+          any
+        >;
+  
+        try {
+          await clientAppChain.start();
+          const resolvedSlotMachine = clientAppChain.runtime.resolve('SlotMachine');
+          setSlotMachine(resolvedSlotMachine);
+        } catch (error) {
+          console.error("Failed to initialize SlotMachine:", error);
+        }
+      }
+    };
+  
+    initializeSlotMachine();
+  }, [client]);
 
-  const fetchBalance = async (): Promise<void> => {
+  const fetchBalance = async () => {
     if (!slotMachine) return;
-    try {
-      const balance = await slotMachine.getBalance();
-      setBalance(balance.toString());
-    } catch (error) {
-      console.error('Error fetching balance:', error);
-    }
+    const balance = await slotMachine.getBalance();
+    setBalance(balance.toString());
   };
 
-  const fetchJackpot = async (): Promise<void> => {
+  const fetchJackpot = async () => {
     if (!slotMachine) return;
-    try {
-      const jackpot = await slotMachine.getJackpot();
-      setJackpot(jackpot.toString());
-    } catch (error) {
-      console.error('Error fetching jackpot:', error);
-    }
+    const jackpot = await slotMachine.getJackpot();
+    setJackpot(jackpot.toString());
   };
 
-  const handleSpin = async (): Promise<void> => {
-    if (!slotMachine) return;
+  const handleSpin = async () => {
+    if (!slotMachine || !client) return;
+    console.log('Spin started'); // Debugging statement
+    setSpinning(true);
+    setSpinCompleteCount(0);
     try {
-      await slotMachine.spin(UInt64.from(bet));
-      fetchBalance();
-      fetchJackpot();
-      const lastSpin = await slotMachine.getLastSpin();
-      setLastSpin(lastSpin.toString());
-      setMessage('Spin complete! Check your results.');
+      const tx = await client.transaction(
+        PublicKey.fromBase58(networkStore.address!),
+        async () => {
+          await slotMachine.spin(UInt64.from(BigInt(bet)));
+        }
+      );
+  
+      await tx.sign();
+      await tx.send();
+  
     } catch (error) {
       console.error('Error spinning:', error);
-      setMessage('Error spinning. Please try again.');
+      notificationStore.create({
+        type: 'error',
+        message: 'Error spinning the slot machine!',
+      });
+      setSpinning(false); // Reset spinning state if an error occurs
     }
   };
 
-  const handleDeposit = async (): Promise<void> => {
+  const handleSpinComplete = () => {
+    setSpinCompleteCount(prev => prev + 1);
+    if (spinCompleteCount === 2) {
+      finalizeSpin();
+    }
+  };
+
+  const finalizeSpin = async () => {
     if (!slotMachine) return;
-    try {
-      await slotMachine.deposit(UInt64.from(bet));
-      fetchBalance();
-      setMessage('Deposit successful!');
-    } catch (error) {
-      console.error('Error depositing:', error);
-      setMessage('Error depositing. Please try again.');
-    }
+    const lastSpin = await slotMachine.getLastSpin();
+    const spinResult = lastSpin.toBigInt();
+
+    const reel3 = Number(spinResult % 10n);
+    const reel2 = Number((spinResult / 10n) % 10n);
+    const reel1 = Number(spinResult / 100n);
+
+    setReels([reel1, reel2, reel3]);
+    setSpinning(false);
+    fetchBalance();
+    fetchJackpot();
   };
 
-  const handleWithdraw = async (): Promise<void> => {
-    if (!slotMachine) return;
-    try {
-      await slotMachine.withdraw(UInt64.from(bet));
-      fetchBalance();
-      setMessage('Withdrawal successful!');
-    } catch (error) {
-      console.error('Error withdrawing:', error);
-      setMessage('Error withdrawing. Please try again.');
-    }
-  };
-
-  const renderReels = (): JSX.Element | null => {
-    if (!lastSpin) return null;
-    const reels = lastSpin.padStart(3, '0').split('').map(Number);
-    const symbols = ['🍒', '🍋', '7️⃣'];
-    return (
-      <>
-        {reels.map((reel, index) => (
-          <span key={index} className="reel">
-            {symbols[reel]}
-          </span>
-        ))}
-      </>
-    );
-  };
+  useEffect(() => {
+    fetchBalance();
+    fetchJackpot();
+  }, [protokitChain.block, slotMachine]);
 
   return (
     <GamePage
@@ -138,31 +198,52 @@ export default function Slot_Machine({
       mobileImage={CoverSVG}
       defaultPage={'Game'}
     >
-      <div className="slot-machine">
-        <h1>Mina Protocol Slot Machine</h1>
-        <div className="info">
-          <p>Balance: {balance} MINA</p>
-          <p>Jackpot: {jackpot} MINA</p>
+      <div className="flex justify-end mb-4">
+        <div className="flex gap-2">
+          <Rules />
+          <HowToPlay />
         </div>
-        <div className="controls">
-          <div className='text-black'>
-          <input
-            type="number"
-            value={bet}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setBet(e.target.value)}
-            min="1"
-            
-          />
-          </div>
-          <div className='flex gap-5 bg-green-500'>
-            <button onClick={handleSpin}>Spin</button>
-            <button onClick={handleDeposit}>Deposit</button>
-            <button onClick={handleWithdraw}>Withdraw</button>
+      </div>
+
+      <div className="flex gap-8 mt-0">
+        {/* Left Column */}
+        <motion.div
+          className="flex flex-col gap-2 items-center justify-center rounded-lg border border-left-accent p-4 w-2/3 pt-6"
+          animate={'windowed'}
+        >
+          <div className="flex gap-4 bg-gradient-to-b from-gray-700 to-gray-900 p-4 rounded-lg shadow-inner">
+            {[0, 1, 2].map((index) => (
+              <Reel 
+                key={index} 
+                spinning={spinning} 
+                finalSymbol={reels[index]} 
+                onSpinComplete={handleSpinComplete}
+              />
+            ))}
           </div>
           
+          <div className='flex gap-6'>
+            <span className='mt-4'><BetControl bet={bet} setBet={setBet} spinning={spinning} /></span> 
+
+            <Button
+              label={spinning ? 'Spinning...' : 'Spin'}
+              onClick={handleSpin}
+              disabled={spinning}
+              className="mt-4 text-black p-4 text-2xl px-6 rounded-full"
+            />
+          </div>
+        </motion.div>
+
+        {/* Right Column */}
+        <div className="w-1/3 p-4 border border-left-accent rounded-lg">  
+          <h2 className="text-left-accent text-xl">Additional Content</h2>
+          <p className="text-left-accent">
+            Here you can display additional information or features related to your game or slot machine.
+          </p>
+          <h2 className="text-left-accent text-xl">Game Info</h2>
+          <p className="text-left-accent">Balance: $ {balance} Znakes </p>
+          <p className="text-left-accent">Jackpot: $ {jackpot} Znakes</p>
         </div>
-        <div className="reels">{renderReels()}</div>
-        <p className="message">{message}</p>
       </div>
     </GamePage>
   );
