@@ -25,7 +25,7 @@ const TIME_PER_ICON = 100;
 
 interface ReelProps {
   spinning: boolean;
-  finalSymbol?: number;
+  finalSymbol?: string;
   onSpinComplete: () => void;
 }
 
@@ -105,6 +105,8 @@ export default function Slot_Machine({
   const [slotMachine, setSlotMachine] = useState<SlotMachine | null>(null);
   const [spinCompleteCount, setSpinCompleteCount] = useState(0);
   const [gameResult, setGameResult] = useState<string | null>(null);
+  const [pendingSpin, setPendingSpin] = useState(false);
+  const [spinTransactionId, setSpinTransactionId] = useState<string | null>(null);
 
   const { client } = useContext(ZkNoidGameContext);
 
@@ -172,7 +174,10 @@ export default function Slot_Machine({
       return;
     }
     
-    if (BigInt(gameBalance) < BigInt(bet)) {
+    const currentBalance = BigInt(gameBalance);
+    const currentBet = BigInt(bet);
+
+    if (currentBalance < currentBet) {
       notificationStore.create({
         type: 'error',
         message: 'Insufficient balance for this bet.',
@@ -195,8 +200,23 @@ export default function Slot_Machine({
       await tx.sign();
       await tx.send();
 
-      // After transaction is processed, trigger finalization
-      finalizeSpin();
+      // Call the spin method
+      const result = await slotMachine.spin(UInt64.from(BigInt(bet)));
+      console.log('Spin result:', result);
+
+      const { transactionId } = result 
+      console.log('Transaction ID:', transactionId.toString());
+
+      // Set pendingSpin to true and store the transaction ID
+      setPendingSpin(true);
+      setSpinTransactionId(transactionId.toString());
+
+      // Start the visual spinning animation with random symbols
+      setReels([
+        Math.floor(Math.random() * 3),
+        Math.floor(Math.random() * 3),
+        Math.floor(Math.random() * 3)
+      ]);
     } catch (error) {
       console.error('Error spinning:', error);
       notificationStore.create({
@@ -211,43 +231,94 @@ export default function Slot_Machine({
     setSpinCompleteCount((prev) => prev + 1);
   };
 
-  const finalizeSpin = async () => {
-    if (!slotMachine) return;
+  // const finalizeSpin = async () => {
+  //   if (!slotMachine) return;
+  //   try {
+  //     const lastSpin = await query?.lastSpins.get(
+  //       PublicKey.fromBase58(networkStore.address!)
+  //     );
+  //     const spinResult = lastSpin.toBigInt();
+
+  //     const reel3 = Number(spinResult % 10n);
+  //     const reel2 = Number((spinResult / 10n) % 10n);
+  //     const reel1 = Number(spinResult / 100n);
+
+  //     setReels([reel1, reel2, reel3]);
+  //     setSpinning(false);
+
+  //     if (reel1 === reel2 && reel2 === reel3) {
+  //       setGameResult('You won!');
+  //     } else {
+  //       setGameResult('You lost. Try again!');
+  //     }
+
+  //     fetchGameBalance();
+  //     fetchJackpot();
+  //   } catch (error) {
+  //     console.error('Error finalizing spin:', error);
+  //     notificationStore.create({
+  //       type: 'error',
+  //       message: 'Error finalizing spin. Please check your game state.',
+  //     });
+  //     setSpinning(false);
+  //   }
+  // };
+
+  const checkPendingSpin = async () => {
+    if (!slotMachine || !networkStore.address || !spinTransactionId) return;
+
     try {
+      // check if the lastSpin has been updated
       const lastSpin = await query?.lastSpins.get(
-        PublicKey.fromBase58(networkStore.address!)
+        PublicKey.fromBase58(networkStore.address)
       );
-      const spinResult = lastSpin.toBigInt();
 
-      const reel3 = Number(spinResult % 10n);
-      const reel2 = Number((spinResult / 10n) % 10n);
-      const reel1 = Number(spinResult / 100n);
-
-      setReels([reel1, reel2, reel3]);
-      setSpinning(false);
-
-      if (reel1 === reel2 && reel2 === reel3) {
-        setGameResult('You won!');
+      if (lastSpin) {
+        const spinResult = lastSpin.toBigInt();
+  
+        const reel3 = Number(spinResult % 10n);
+        const reel2 = Number((spinResult / 10n) % 10n);
+        const reel1 = Number(spinResult / 100n);
+  
+        setReels([reel1, reel2, reel3]);
+        setSpinning(false);
+        setPendingSpin(false);
+        setSpinTransactionId(null);
+  
+        // Check for jackpot
+        const isJackpot = reel1 === reel2 && reel2 === reel3;
+        
+        if (isJackpot) {
+          setGameResult('Jackpot! You won prize!');
+        } else {
+          setGameResult('You lost. Try again!');
+        }
+  
+        fetchGameBalance();
+        fetchJackpot();
       } else {
-        setGameResult('You lost. Try again!');
+        // If lastSpin is not updated, the transaction might still be pending
+        console.log('Transaction still pending. Will check again on next block.');
       }
-
-      fetchGameBalance();
-      fetchJackpot();
     } catch (error) {
-      console.error('Error finalizing spin:', error);
+      console.error('Error checking pending spin:', error);
       notificationStore.create({
         type: 'error',
-        message: 'Error finalizing spin. Please check your game state.',
+        message: 'Error checking spin result. Please try again.',
       });
       setSpinning(false);
+      setPendingSpin(false);
+      setSpinTransactionId(null);
     }
   };
 
   useEffect(() => {
     fetchGameBalance();
     fetchJackpot();
-  }, [protokitChain.block, slotMachine]);
+    if (pendingSpin && spinTransactionId) {
+      checkPendingSpin();
+    }
+  }, [protokitChain.block, slotMachine, pendingSpin, spinTransactionId]);
 
   return (
     <GamePage
@@ -289,7 +360,7 @@ export default function Slot_Machine({
               <Reel 
                 key={index} 
                 spinning={spinning} 
-                finalSymbol={reels[index]} 
+                finalSymbol={SYMBOLS[reels[index]]} 
                 onSpinComplete={handleSpinComplete}
               />
             ))}
