@@ -103,7 +103,7 @@ export class SlotMachine extends RuntimeModule {
 
     // Generate a unique transaction ID
     const transactionId = Poseidon.hash([Field.random(), Field.random()]);
-    console.log('Transaction ID:', transactionId.toString());
+    // console.log('Transaction ID:', transactionId.toString());
 
     // Store the transaction ID along with the spin result
     await this.lastSpinHashes.set(sender, transactionId);
