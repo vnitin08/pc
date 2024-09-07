@@ -238,11 +238,17 @@ export default function Slot_Machine({
 
     try {
       // Start the visual spinning animation with random symbols
-      setReels([
-        Math.floor(Math.random() * 3),
-        Math.floor(Math.random() * 3),
-        Math.floor(Math.random() * 3)
-      ]);
+      // setReels([
+      //   Math.floor(Math.random() * 3),
+      //   Math.floor(Math.random() * 3),
+      //   Math.floor(Math.random() * 3)
+      // ]);
+
+      const reelResult = await slotMachine!.spin(UInt64.from(bet));
+      // console.log('Reel Result:', reelResult.toString());
+      console.log('Reel 1', reelResult.reel1);
+      console.log('Reel 2', reelResult.reel2);
+      console.log('Reel 3', reelResult.reel3);
 
       // Simulate waiting for on-chain result
       setTimeout(async () => {
@@ -255,12 +261,14 @@ export default function Slot_Machine({
           );
 
           if (lastSpin) {
+            console.log('Raw spin result:', lastSpin.toString());
             const spinResult = lastSpin.toBigInt();
     
-            const reel3 = Number(spinResult % 10n);
-            const reel2 = Number((spinResult / 10n) % 10n);
-            const reel1 = Number(spinResult / 100n);
-    
+            const reel1 = Number(spinResult / 90n);
+            const reel2 = Number((spinResult / 3n) % 3n);
+            const reel3 = Number(spinResult % 3n);
+            
+            console.log('Processed spin result:', { reel1, reel2, reel3 });
             setReels([reel1, reel2, reel3]);
     
             // Check for win condition

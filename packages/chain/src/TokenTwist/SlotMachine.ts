@@ -36,7 +36,7 @@ export class SlotMachine extends RuntimeModule {
 
 
   @runtimeMethod()
-  public async spin(bet: UInt64): Promise<{ reel1: Field; reel2: Field; reel3: Field; transactionId: Field }> {
+  public async spin(bet: UInt64): Promise<{ reel1: Field; reel2: Field; reel3: Field }> {
     const sender = this.transaction.sender.value;
     const playerBalance = await this.balances.getBalance(ZNAKE_TOKEN_ID, sender);
     
@@ -65,6 +65,7 @@ export class SlotMachine extends RuntimeModule {
     spinResult.value = reel1.mul(Field(100)).add(reel2.mul(Field(10))).add(reel3);
     await this.lastSpins.set(sender, Field.from(spinResult.toString()));
 
+    console.log('Spin :', reel1.toString(), reel2.toString(), reel3.toString());
 
     // Check if the player won the jackpot
     const isJackpot = Provable.if(
@@ -105,14 +106,14 @@ export class SlotMachine extends RuntimeModule {
 
     await this.balances.setBalance(ZNAKE_TOKEN_ID, sender, newPlayerBalance)
 
-    // Generate a unique transaction ID
-    const transactionId = Poseidon.hash([Field.random(), Field.random()]);
-    // console.log('Transaction ID:', transactionId.toString());
+    // // Generate a unique transaction ID
+    // const transactionId = Poseidon.hash([Field.random(), Field.random()]);
+    // // console.log('Transaction ID:', transactionId.toString());
 
-    // Store the transaction ID along with the spin result
-    await this.lastSpinHashes.set(sender, transactionId);
+    // // Store the transaction ID along with the spin result
+    // await this.lastSpinHashes.set(sender, transactionId);
 
-    return { reel1, reel2, reel3, transactionId };
+    return { reel1, reel2, reel3 };
   }
 
 
