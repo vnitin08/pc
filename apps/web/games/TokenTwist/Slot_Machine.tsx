@@ -98,7 +98,7 @@ export default function Slot_Machine({
   const protokitBalancesStore = useProtokitBalancesStore();
 
   const [gameBalance, setGameBalance] = useState('0');
-  const [bet, setBet] = useState<number>(1);
+  const [bet, setBet] = useState<bigint>(1n * 10n ** 9n);
   const [jackpot, setJackpot] = useState('0');
   const [spinning, setSpinning] = useState(false);
   const [reels, setReels] = useState([0, 0, 0]);
@@ -143,7 +143,8 @@ export default function Slot_Machine({
     try {
       const balance =
         await protokitBalancesStore.balances[networkStore.address!];
-      if (balance) setGameBalance(balance.toString());
+        if (balance) setGameBalance(balance.toString());
+        console.log('Game balance:', balance);
     } catch (error) {
       console.error('Error fetching game balance:', error);
       notificationStore.create({
@@ -206,8 +207,8 @@ export default function Slot_Machine({
       // setBetTransactionId();
 
       // Update game balance and jackpot immediately after placing bet
-      await fetchGameBalance();
-      await fetchJackpot();
+      // await fetchGameBalance();
+      // await fetchJackpot();
 
       notificationStore.create({
         type: 'success',
@@ -271,8 +272,8 @@ export default function Slot_Machine({
               setGameResult('You lost. Try again!');
             }
     
-            fetchGameBalance();
-            fetchJackpot();
+            // fetchGameBalance();
+            // fetchJackpot();
           } else {
             throw new Error('Failed to fetch spin result');
           }
@@ -298,53 +299,6 @@ export default function Slot_Machine({
     }
   };
 
-  // const checkPendingSpin = async () => {
-  //   if (!slotMachine || !networkStore.address || !spinTransactionId) return;
-
-  //   try {
-  //     // check if the lastSpin has been updated
-  //     const lastSpin = await query?.lastSpins.get(
-  //       PublicKey.fromBase58(networkStore.address)
-  //     );
-
-  //     if (lastSpin) {
-  //       const spinResult = lastSpin.toBigInt();
-  
-  //       const reel3 = Number(spinResult % 10n);
-  //       const reel2 = Number((spinResult / 10n) % 10n);
-  //       const reel1 = Number(spinResult / 100n);
-  
-  //       setReels([reel1, reel2, reel3]);
-  //       setSpinning(false);
-  //       setPendingSpin(false);
-  //       setSpinTransactionId(null);
-  
-  //       // Check for jackpot
-  //       const isJackpot = reel1 === reel2 && reel2 === reel3;
-        
-  //       if (isJackpot) {
-  //         setGameResult('Jackpot! You won the big prize!');
-  //       } else {
-  //         setGameResult('You lost. Try again!');
-  //       }
-  
-  //       fetchGameBalance();
-  //       fetchJackpot();
-  //     } else {
-  //       // If lastSpin is not updated, the transaction might still be pending
-  //       console.log('Transaction still pending. Will check again on next block.');
-  //     }
-  //   } catch (error) {
-  //     console.error('Error checking pending spin:', error);
-  //     notificationStore.create({
-  //       type: 'error',
-  //       message: 'Error checking spin result. Please try again.',
-  //     });
-  //     setSpinning(false);
-  //     setPendingSpin(false);
-  //     setSpinTransactionId(null);
-  //   }
-  // };
 
   const handleSpinComplete = () => {
     setSpinCompleteCount((prev) => prev + 1);
@@ -353,10 +307,7 @@ export default function Slot_Machine({
   useEffect(() => {
     fetchGameBalance();
     fetchJackpot();
-    // if (pendingSpin && spinTransactionId) {
-    //   checkPendingSpin();
-    // }
-  }, [protokitChain.block, slotMachine, pendingSpin, betTransactionId]);
+  }, [protokitChain.block, slotMachine, betTransactionId]);
 
   return (
     <GamePage
@@ -378,7 +329,7 @@ export default function Slot_Machine({
           Game Balance: ${(Number(gameBalance) / 10 ** 9).toFixed(2)} Znakes
           </p>
           <p className="text-2xl text-left-accent">
-            Jackpot: ${jackpot} Znakes
+            Jackpot: ${(Number(jackpot) / 10 ** 9).toFixed(2)} Znakes
           </p>
         </div>
         <div className="flex gap-2">

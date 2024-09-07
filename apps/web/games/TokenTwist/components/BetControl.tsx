@@ -1,8 +1,8 @@
 import React from 'react';
 
 interface BetControlProps {
-  bet: number;
-  setBet: (bet: number) => void;
+  bet: bigint;
+  setBet: (bet: bigint) => void;
   spinning: boolean;
 }
 
@@ -12,15 +12,15 @@ const BetControl: React.FC<BetControlProps> = ({ bet, setBet, spinning }) => {
         <div className="flex items-center gap-2">
         <button 
             className="bg-left-accent text-black p-2 mr-2 rounded-full"
-            onClick={() => setBet(bet > 1 ? bet - 1 : bet)} 
-            disabled={spinning || bet <= 1}
+            onClick={() => setBet(bet > (10n**9n) ? (bet - (10n**9n)) : bet)} 
+            disabled={spinning || bet <= (10n**9n)}
         >
             -
         </button>
-        <span className="text-xl">{bet}</span>
+        <span className="text-xl">{bet / (10n**9n)}</span>
         <button 
             className="bg-left-accent text-black p-2 ml-2 rounded-full"
-            onClick={() => setBet(bet + 1)} 
+            onClick={() => setBet(bet + (10n**9n))} 
             disabled={spinning}
         >
             +

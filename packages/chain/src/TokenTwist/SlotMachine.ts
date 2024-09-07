@@ -43,7 +43,11 @@ export class SlotMachine extends RuntimeModule {
     assert(playerBalance.greaterThanOrEqual(bet), 'Insufficient balance');
 
     // Deduct bet from player balance
-    await this.balances.setBalance(ZNAKE_TOKEN_ID, sender, playerBalance.sub(bet));
+    // await this.balances.setBalance(ZNAKE_TOKEN_ID, sender, playerBalance.sub(bet));
+
+    // Deduct bet from player balance
+    const balanceAfterBet = playerBalance.sub(bet);
+    await this.balances.setBalance(ZNAKE_TOKEN_ID, sender, balanceAfterBet);
 
     // Generate random numbers for reels (0, 1, or 2 representing different symbols)
     const reel1 = Field.from(this.randomGen.getNumber(3).toString());
@@ -72,7 +76,7 @@ export class SlotMachine extends RuntimeModule {
     );
 
     const currentJackpot = (await this.jackpot.get()).value;
-    let newPlayerBalance = playerBalance;
+    let newPlayerBalance = balanceAfterBet;  // Initialize with balance after bet
 
     newPlayerBalance = Provable.if<UInt64>(
       isJackpot.equals(Field(1)),
@@ -90,14 +94,14 @@ export class SlotMachine extends RuntimeModule {
 
     await this.jackpot.set(newJackpot);
 
-    const hasMatch = reel1.equals(reel2).or(reel2.equals(reel3)).or(reel1.equals(reel3));
+    // const hasMatch = reel1.equals(reel2).or(reel2.equals(reel3)).or(reel1.equals(reel3));
     
-    newPlayerBalance = Provable.if<UInt64>(
-      hasMatch.and(isJackpot.equals(Field(0))),
-      UInt64,
-      newPlayerBalance.add(bet.mul(UInt64.from(2))),
-      newPlayerBalance
-    );
+    // newPlayerBalance = Provable.if<UInt64>(
+    //   hasMatch.and(isJackpot.equals(Field(0))),
+    //   UInt64,
+    //   newPlayerBalance.add(bet.mul(UInt64.from(2))),
+    //   newPlayerBalance
+    // );
 
     await this.balances.setBalance(ZNAKE_TOKEN_ID, sender, newPlayerBalance)
 
