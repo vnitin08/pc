@@ -50,9 +50,9 @@ export class SlotMachine extends RuntimeModule {
     await this.balances.setBalance(ZNAKE_TOKEN_ID, sender, balanceAfterBet);
 
     // Generate random numbers for reels (0, 1, or 2 representing different symbols)
-    const reel1 = Field.from(this.randomGen.getNumber(3).toString());
-    const reel2 = Field.from(this.randomGen.getNumber(3).toString());
-    const reel3 = Field.from(this.randomGen.getNumber(3).toString());
+    const reel1 = (this.randomGen.getNumber(3).magnitude.value);
+    const reel2 = (this.randomGen.getNumber(3).magnitude.value);
+    const reel3 = (this.randomGen.getNumber(3).magnitude.value);
 
     // Hash the spin result using Poseidon
     const spinHash = Poseidon.hash([reel1, reel2, reel3]);
@@ -65,7 +65,7 @@ export class SlotMachine extends RuntimeModule {
     spinResult.value = reel1.mul(Field(100)).add(reel2.mul(Field(10))).add(reel3);
     await this.lastSpins.set(sender, Field.from(spinResult.toString()));
 
-    console.log('Spin :', reel1.toString(), reel2.toString(), reel3.toString());
+    // console.log('Spin :', reel1.toString(), reel2.toString(), reel3.toString());
 
     // Check if the player won the jackpot
     const isJackpot = Provable.if(
