@@ -9,7 +9,7 @@ const Rules = () => {
 
   return (
     <>
-      <Button label="Game Rules" onClick={toggleRules} className='rounded-full'/>
+      <Button label="Rules" onClick={toggleRules} className='rounded-full p-4 py-4'/>
       {isOpen && (
         <Modal onClose={toggleRules}>
           <h2 className="text-2xl font-bold text-left-accent mb-4">Game Rules</h2>

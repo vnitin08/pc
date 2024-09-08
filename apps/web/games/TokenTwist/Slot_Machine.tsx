@@ -21,7 +21,7 @@ import { useProtokitBalancesStore } from '@/lib/stores/protokitBalances';
 const SYMBOLS = ['💲', '₿', '💰'];
 const ICON_HEIGHT = 100;
 const NUM_ICONS = SYMBOLS.length;
-const TIME_PER_ICON = 100;
+const TIME_PER_ICON = 50;
 
 interface ReelProps {
   spinning: boolean;
@@ -39,27 +39,46 @@ const Reel: React.FC<ReelProps> = ({
 
   useEffect(() => {
     if (spinning) {
-      const delta = 2 * NUM_ICONS + Math.round(Math.random() * NUM_ICONS);
-      const duration = (8 + delta) * TIME_PER_ICON;
+      const delta = 6 * NUM_ICONS;
+      const duration = (14 + delta) * TIME_PER_ICON;
+      const newOffset = offset + delta * ICON_HEIGHT;
 
-      setOffset((prev) => prev + delta * ICON_HEIGHT);
+      // setOffset((prev) => prev + delta * ICON_HEIGHT);
 
       setTimeout(() => {
         if (reelRef.current) {
           reelRef.current.style.transition = `transform ${duration}ms cubic-bezier(.41,-0.01,.63,1.09)`;
-          reelRef.current.style.transform = `translateY(${-(offset + delta * ICON_HEIGHT)}px)`;
+          reelRef.current.style.transform = `translateY(${-newOffset}px)`;
         }
       }, 0);
 
       setTimeout(() => {
         if (reelRef.current) {
           reelRef.current.style.transition = 'none';
-          reelRef.current.style.transform = `translateY(${-((offset + delta * ICON_HEIGHT) % (NUM_ICONS * ICON_HEIGHT))}px)`;
+          const finalOffset = newOffset % (NUM_ICONS * ICON_HEIGHT);
+          reelRef.current.style.transform = `translateY(${-finalOffset}px)`;
+          setOffset(finalOffset);
         }
         onSpinComplete();
       }, duration);
     }
-  }, [spinning]);
+  }, [spinning, finalSymbol, offset]);
+  
+  const getRandomSymbol = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+
+  const renderSymbols = () => {
+    return [...SYMBOLS, ...SYMBOLS, ...SYMBOLS, ...SYMBOLS, ...SYMBOLS, ...SYMBOLS, ...SYMBOLS, ...SYMBOLS].map((symbol, index) => {
+      const isSecondRow = (index % 3 === 1);
+      return (
+        <div 
+          key={index} 
+          className={`h-[100px] flex items-center justify-center text-6xl ${isSecondRow ? 'opacity-100' : 'opacity-30'}`}
+        >
+          {isSecondRow ? (finalSymbol || symbol) : getRandomSymbol()}
+        </div>
+      );
+    });
+  };
 
   return (
     <div className="reel relative h-[300px] w-[100px] overflow-hidden rounded-md border border-black/30 bg-gray-800">
@@ -68,14 +87,7 @@ const Reel: React.FC<ReelProps> = ({
         className="absolute left-0 top-0 w-full"
         style={{ transform: `translateY(${-offset}px)` }}
       >
-        {[...SYMBOLS, ...SYMBOLS, ...SYMBOLS].map((symbol, index) => (
-          <div 
-            key={index} 
-            className="h-[100px] flex items-center justify-center text-6xl"
-          >
-            {symbol}
-          </div>
-        ))}
+        {renderSymbols()}
       </div>
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/40 "></div>
     </div>
@@ -290,7 +302,7 @@ export default function Slot_Machine({
           setBetPlaced(false);
           setBetTransactionId(null);
         }
-      }, 3000); // Adjust this delay as needed
+      }, 1500); // Adjust this delay as needed
     } catch (error) {
       console.error('Error spinning:', error);
       notificationStore.create({
@@ -321,29 +333,28 @@ export default function Slot_Machine({
       <div className="item-center mb-4 flex justify-between">
         <div className="flex gap-4">
           <p className="text-2xl text-left-accent">
-            Auro Balance: $
-            {(
-              Number(minaBalancesStore.balances[networkStore.address!] ?? 0) /
-              10 ** 9
-            ).toFixed(2)}{' '}
+            Auro Balance:{' '}
+            <span className='text-white font-light'>$
+              {(
+                Number(minaBalancesStore.balances[networkStore.address!] ?? 0) /
+                10 ** 9
+              ).toFixed(2)}{' '} MINA
+            </span>
           </p>
           <p className="text-2xl text-left-accent">
-          Game Balance: ${(Number(gameBalance) / 10 ** 9).toFixed(2)} Znakes
+          Game Balance: <span className='text-white font-light'>${(Number(gameBalance) / 10 ** 9).toFixed(2)} znakes</span>
           </p>
           <p className="text-2xl text-left-accent">
-            Jackpot: ${(Number(jackpot) / 10 ** 9).toFixed(2)} Znakes
+            Jackpot: <span className='text-white font-light'>${(Number(jackpot) / 10 ** 9).toFixed(2)} znakes</span>
           </p>
         </div>
         <div className="flex gap-2">
           <Rules />
-          <HowToPlay />
         </div>
       </div>
 
-      <div className="mt-0 flex gap-8 ">
-        {/* Left Column */}
         <motion.div
-          className="flex w-2/3 flex-col items-center justify-center gap-2 rounded-lg border border-left-accent p-4 pt-6"
+          className="flex w-1/2 flex-col items-center gap-2 rounded-lg border border-left-accent p-4 pt-6 ml-96"
           animate={'windowed'}
         >
           <div className="flex gap-4 rounded-lg bg-gradient-to-b from-gray-700 to-gray-900 p-4  shadow-inner">
@@ -385,16 +396,6 @@ export default function Slot_Machine({
             </div>
           )}
         </motion.div>
-
-        {/* Right Column */}
-        <div className="w-1/3 rounded-lg border border-left-accent p-4 ">  
-          <h2 className="text-xl text-left-accent ">Additional Content</h2>
-          <p className="text-left-accent">
-            Here you can display additional information or features related to 
-            your game or slot machine.
-          </p>
-        </div>
-      </div>
     </GamePage>
   );
 };
