@@ -10,7 +10,6 @@ import { SlotMachine } from './TokenTwist';
 
 const modules = {
   Balances,
-  GuessGame,
   SlotMachine
 };
 
@@ -18,7 +17,6 @@ const config: ModulesConfig<typeof modules> = {
   Balances: {
     totalSupply: UInt64.from(10000),
   },
-  GuessGame: {},
   SlotMachine: {}
 };
 

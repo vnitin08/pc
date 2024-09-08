@@ -10,7 +10,7 @@ export const tokenTwistConfig = createZkNoidGameConfig({
   type: ZkNoidGameType.SinglePlayer,
   name: 'TokenTwist : Try your luck',
   description: 'Player try their luck to win the jackpot',
-  image: '/image/games/soon.svg',
+  image: '/image/games/logo1.png',
   logoMode: LogoMode.CENTER,
   genre: ZkNoidGameGenre.Lucky,
   features: [ZkNoidGameFeature.SinglePlayer],
@@ -19,7 +19,7 @@ export const tokenTwistConfig = createZkNoidGameConfig({
   popularity: 50,
   author: 'TokenTwist Team',
   rules:
-    'Number guessing is a game where a player hides a number and gives the PC to another player. Other player tries to guess the number',
+    'Token Twist is a game where a player try their luck by spin the wheel  and win the jackpot',
   runtimeModules: {
     SlotMachine,
   },

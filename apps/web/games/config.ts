@@ -11,7 +11,6 @@ import { tokenTwistConfig } from './TokenTwist/config';
 
 export const zkNoidConfig = createConfig({
   games: [
-    numberGuessingConfig,
     tokenTwistConfig
   ],
 });
