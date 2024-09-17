@@ -18,5 +18,6 @@ export { Balances } from './framework';
 
 export { GuessGame } from './number_guessing';
 export { SlotMachine } from './TokenTwist';
+export { PowerClash } from './PowerClash/index.js';
 
 export { ClientAppChain, ProtokitLibrary, UInt64 as ProtoUInt64 };
