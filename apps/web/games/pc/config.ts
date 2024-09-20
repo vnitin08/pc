@@ -3,8 +3,9 @@ import { ZkNoidGameType } from '@/lib/platform/game_types';
 import { PowerClash }  from 'zknoid-chain-dev';
 import pc from './pc';
 import { ZkNoidGameFeature, ZkNoidGameGenre } from '@/lib/platform/game_tags';
-import RandzuLobby from '@/games/randzu/components/RandzuLobby';
+// import RandzuLobby from '@/games/randzu/components/RandzuLobby';
 import { LogoMode } from '@/app/constants/games';
+import PcLobby from './components/PcLobby';
 
 export const powerclashConfig = createZkNoidGameConfig({
   id: 'powerclash',
@@ -26,5 +27,5 @@ export const powerclashConfig = createZkNoidGameConfig({
     PowerClash,
   },
   page: pc,
-  lobby: RandzuLobby,
+  lobby: PcLobby,
 });
