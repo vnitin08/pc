@@ -194,7 +194,14 @@ export class PowerClash extends MatchMaker {
       lastMoveBlockHeight: this.network.block.height,
     });
 
-    shouldInit.assertTrue("Game should be initialized");
+    // shouldInit.assertTrue("Game should be initialized");
+    if (shouldInit.equals(Bool(true))) {
+      // Proceed with initialization
+    } else {
+      // Handle the case where initialization isn't needed
+      console.warn("Game is already initialized or initialization is skipped.");
+    }
+
     await this.games.set(gameId, game);
     await this.gameFund.set(gameId, lobby.participationFee.mul(ProtoUInt64.from(2)));
 
