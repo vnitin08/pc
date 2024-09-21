@@ -1,5 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
-import React from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
   usePowerClashMatchQueueStore,
   useObservePowerClashMatchQueue 
@@ -78,7 +77,7 @@ const PowerClash: React.FC = () => {
     }
   }, [matchQueue.activeGameId]);
 
-  const makeMove = async (move: string) => {
+  const makeMove = useCallback(async (move: string) => {
     if (!query || !matchQueue.activeGameId) {
       notificationStore.create({
         type: 'error',
@@ -131,9 +130,9 @@ const PowerClash: React.FC = () => {
         message: 'Failed to commit move. Please try again.',
       });
     }
-  };
+  }, [query, matchQueue.activeGameId, client, sessionPrivateKey, notificationStore]);
 
-  const revealMove = async () => {
+  const revealMove = useCallback(async () => {
     if (!query || !matchQueue.activeGameId || !selectedMove || salt === null) {
       notificationStore.create({
         type: 'error',
@@ -160,7 +159,7 @@ const PowerClash: React.FC = () => {
       );
 
       tx.transaction = tx.transaction?.sign(sessionPrivateKey);
-      const result = await tx.send();
+      await tx.send();
 
       const revealMoveResult = await PowerClash.revealMove.get(
         PublicKey.fromBase58(sessionPrivateKey.toPublicKey().toBase58())
@@ -195,7 +194,7 @@ const PowerClash: React.FC = () => {
         message: 'Failed to reveal move. Please try again.',
       });
     }
-  };  
+  }, [query, matchQueue.activeGameId, selectedMove, salt, client, sessionPrivateKey, notificationStore]);  
 
   type GameStateType = {
     player1Move: { move: Field };
@@ -203,7 +202,7 @@ const PowerClash: React.FC = () => {
     gameWinner: PublicKey;
   };
   
-  const fetchGameState = async () => {
+  const fetchGameState = useCallback(async () => {
     if (!query || !matchQueue.activeGameId) return;
     const PowerClash = client.runtime.resolve('PowerClash');
     try {
@@ -232,13 +231,13 @@ const PowerClash: React.FC = () => {
         message: 'Failed to fetch game state. Please try again.',
       });
     }
-  };
+  }, [query, matchQueue.activeGameId, commitment, client, notificationStore]);
 
   useEffect(() => {
     fetchGameState();
     const interval = setInterval(fetchGameState, 5000); // Poll every 5 seconds
     return () => clearInterval(interval);
-  }, [query, matchQueue.activeGameId]);
+  }, [fetchGameState]);
 
   useEffect(() => {
     if (gameState === GameState.RoundEnd) {
