@@ -22,12 +22,12 @@ import { Lobby } from '../engine/LobbyManager';
 const ROUNDS_TO_WIN = 2; // Best of 3
 const MOVE_TIME_LIMIT = 50; // Assuming 5-second block time, this gives ~4 minutes per move
 
-class RPSLSMove extends Struct({
+export class RPSLSMove extends Struct({
   move: Field, // 0: Rock, 1: Paper, 2: Scissors, 3: Lizard, 4: Spock
   salt: Field,
 }) {}
 
-class Game extends Struct({
+export class Game extends Struct({
   id: UInt64,
   player1: PublicKey,
   player2: PublicKey,
@@ -52,7 +52,7 @@ export class PowerClash extends MatchMaker {
   }
 
   @runtimeMethod()
-  public async commitMove(gameId: UInt64, commitment: Field): Promise<void> {
+  public async commitMove(gameId: UInt64, commitment: Field): Promise<{ success: boolean, game: Game }> {
     const sender = this.transaction.sender.value;
     const game = (await this.games.get(gameId)).value;
     
@@ -71,10 +71,12 @@ export class PowerClash extends MatchMaker {
 
     game.lastMoveBlockHeight = this.network.block.height;
     await this.games.set(gameId, game);
+
+    return { success: true, game };
   }
 
   @runtimeMethod()
-  public async revealMove(gameId: UInt64, move: RPSLSMove): Promise<void> {
+  public async revealMove(gameId: UInt64, move: RPSLSMove): Promise<{ success: boolean, game: Game, roundWinner: PublicKey | null }> {
     const sender = this.transaction.sender.value;
     const game = (await this.games.get(gameId)).value;
 
@@ -94,14 +96,17 @@ export class PowerClash extends MatchMaker {
       game.player2Move = move;
     }
 
+    let roundWinner: PublicKey | null = null;
+
     if (!game.player1Move.move.equals(Field(-1)) && !game.player2Move.move.equals(Field(-1))) {
-      const roundWinner = this.determineWinner(game.player1Move.move, game.player2Move.move, game.player1, game.player2);
+      roundWinner = this.determineWinner(game.player1Move.move, game.player2Move.move, game.player1, game.player2);
       
       if (roundWinner.equals(game.player1)) {
         game.player1Wins = game.player1Wins.add(1);
       } else if (roundWinner.equals(game.player2)) {
         game.player2Wins = game.player2Wins.add(1);
       }
+
 
       if (game.player1Wins.equals(Field(ROUNDS_TO_WIN))) {
         game.gameWinner = game.player1;
@@ -122,10 +127,12 @@ export class PowerClash extends MatchMaker {
 
     game.lastMoveBlockHeight = this.network.block.height;
     await this.games.set(gameId, game);
+
+    return { success: true, game, roundWinner };
   }
 
   @runtimeMethod()
-  public async claimTimeoutVictory(gameId: UInt64): Promise<void> {
+  public async claimTimeoutVictory(gameId: UInt64): Promise<{ success: boolean, game: Game }> {
     const game = (await this.games.get(gameId)).value;
     assert(game.gameWinner.equals(PublicKey.empty()), 'Game already finished');
 
@@ -141,6 +148,8 @@ export class PowerClash extends MatchMaker {
     game.gameWinner = Provable.if(isPlayer1, game.player1, game.player2);
     await this.endGame(game);
     await this.games.set(gameId, game);
+
+    return { success: true, game };
   }
 
   private determineWinner(move1: Field, move2: Field, player1: PublicKey, player2: PublicKey): PublicKey {
@@ -194,16 +203,12 @@ export class PowerClash extends MatchMaker {
       lastMoveBlockHeight: this.network.block.height,
     });
 
-    // shouldInit.assertTrue("Game should be initialized");
     if (shouldInit.equals(Bool(true))) {
-      // Proceed with initialization
+      await this.games.set(gameId, game);
+      await this.gameFund.set(gameId, lobby.participationFee.mul(ProtoUInt64.from(2)));
     } else {
-      // Handle the case where initialization isn't needed
       console.warn("Game is already initialized or initialization is skipped.");
     }
-
-    await this.games.set(gameId, game);
-    await this.gameFund.set(gameId, lobby.participationFee.mul(ProtoUInt64.from(2)));
 
     return gameId;
   }
