@@ -57,6 +57,8 @@ const pc: React.FC = () => {
   const [commitment, setCommitment] = useState<Field | null>(null);
   const [salt, setSalt] = useState<Field | null>(null);
   const [opponentMove, setOpponentMove] = useState<string | null>(null);
+  const [roundWinner, setRoundWinner] = useState<PublicKey | null>(null);
+  const [gameWinner, setGameWinner] = useState<PublicKey | null>(null);
   const { client } = useContext(ZkNoidGameContext);
 
   if (!client) {
@@ -174,22 +176,41 @@ const pc: React.FC = () => {
         sessionPrivateKey.toPublicKey(), 
         async () => {
           PowerClash.revealMove(
-          UInt64.from(matchQueue.activeGameId!),
-          {
-            move: Field(moveIndex),
-            salt: salt
-          }
-        );
-      });
+            UInt64.from(matchQueue.activeGameId!),
+            {
+              move: Field(moveIndex),
+              salt: salt
+            }
+          );
+        }
+      );
 
       tx.transaction = tx.transaction?.sign(sessionPrivateKey);
-      await tx.send();
+      const result = await tx.send();
 
-      notificationStore.create({
-        type: 'success',
-        message: 'Your move has been revealed.',
-      });
-      setGameState(GameState.Reveal);
+      // Extract the round winner from the transaction result
+      // const revealMoveResult = result.events.find(event => event.type === 'revealMove');
+      const revealMoveResult = await PowerClash.revealMove.get(
+        PublicKey.fromBase58(sessionPrivateKey.toPublicKey().toBase58())
+      )
+      console.log('win win win winw iwnniw', revealMoveResult);
+      if (revealMoveResult) {
+        const { roundWinner } = revealMoveResult.event as { roundWinner: PublicKey | null };
+        setRoundWinner(roundWinner);
+        if (roundWinner) {
+          notificationStore.create({
+            type: 'success',
+            message: `Round winner: ${roundWinner.equals(sessionPrivateKey.toPublicKey()) ? 'You' : 'Opponent'}`,
+          });
+        } else {
+          notificationStore.create({
+            type: 'message',
+            message: 'Round ended in a tie.',
+          });
+        }
+      }
+
+      setGameState(GameState.RoundEnd);
     } catch (error) {
       console.error('Error revealing move:', error);
       notificationStore.create({
@@ -199,43 +220,13 @@ const pc: React.FC = () => {
     }
   };
 
-  const fetchGameState = async () => {
-    if (!query || !matchQueue.activeGameId) return;
-    try {
-      const gameState = await query.getGameState.get(UInt64.from(matchQueue.activeGameId));
-      if (gameState) {
-        if (gameState.player1Move.move.toString() !== '-1' && gameState.player2Move.move.toString() !== '-1') {
-          setOpponentMove(moves[Number(gameState.player2Move.move.toString())]);
-          setGameState(GameState.RoundEnd);
-        } else if (commitment && !gameState.player1Move.move.equals(Field(-1))) {
-          setGameState(GameState.Reveal);
-        }
-
-        if (!gameState.gameWinner.equals(Field(0))) {
-          setGameState(GameState.GameEnd);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching game state:', error);
-      notificationStore.create({
-        type: 'error',
-        message: 'Failed to fetch game state. Please try again.',
-      });
-    }
-  };
-
-  useEffect(() => {
-    fetchGameState();
-    const interval = setInterval(fetchGameState, 5000); // Poll every 5 seconds
-    return () => clearInterval(interval);
-  }, [query, matchQueue.activeGameId]);
 
   useEffect(() => {
     if (matchQueue.activeGameId && Number(matchQueue.activeGameId) !== 0) {
       setGameState(GameState.Commitment);
     }
   }, [matchQueue.activeGameId]);
-
+  
   return (
     <GamePage
       gameConfig={powerclashConfig}
@@ -283,22 +274,39 @@ const pc: React.FC = () => {
             ))}
           </div>
 
-          {gameState === GameState.WaitingForOpponent && (
-            <div className="text-center text-2xl">Waiting for opponent...</div>
-          )}
-
           {gameState === GameState.RoundEnd && (
             <div className="text-center text-4xl font-bold mt-8">
-              {/* Display round result here */}
               Round Ended!
+              {roundWinner && (
+                <div className="text-2xl mt-4">
+                  Round Winner: {roundWinner.equals(sessionPrivateKey.toPublicKey()) ? 'You' : 'Opponent'}
+                </div>
+              )}
+              {!roundWinner && (
+                <div className="text-2xl mt-4">
+                  This round was a tie!
+                </div>
+              )}
             </div>
           )}
 
           {gameState === GameState.GameEnd && (
             <div className="text-center text-4xl font-bold mt-8">
-              {/* Display game result here */}
               Game Over!
+              {gameWinner && (
+                <div className="text-2xl mt-4">
+                  Game Winner: {gameWinner.equals(sessionPrivateKey.toPublicKey()) ? 'You' : 'Opponent'}
+                </div>
+              )}
             </div>
+          )}
+
+          {gameState === GameState.Reveal && (
+            <Button
+              onClick={revealMove}
+              className="mt-8 p-4 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded"
+              label="Reveal Move"
+            />
           )}
         </div>
 
